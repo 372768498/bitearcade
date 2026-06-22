@@ -1,0 +1,84 @@
+name: Build & Deploy
+
+# Refreshes the game catalog from the feeds and redeploys daily, plus on every push to main.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * *' # daily at 03:17 UTC (off the hour to avoid scheduler congestion)
+  workflow_dispatch: {} # manual "Run workflow" button
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let the newest win.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Pull fresh games. If a feed is down, the committed data/games.json is used as fallback,
+      # so a flaky feed never publishes an empty site.
+      - name: Fetch latest games
+        run: node scripts/fetch-games.js
+        continue-on-error: true
+
+      - name: Build site
+        run: node scripts/build.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+# ---------------------------------------------------------------------------
+# ONE-TIME SETUP
+#   1. Create a GitHub repo, push this project (main branch).
+#   2. Repo Settings -> Pages -> Build and deployment -> Source = "GitHub Actions".
+#   3. (Custom domain) Set `siteUrl` in config.js to your domain. The build writes a CNAME
+#      automatically. Then in Settings -> Pages add the same custom domain, and at your DNS
+#      provider point the apex (@) at GitHub Pages:
+#         A     185.199.108.153
+#         A     185.199.109.153
+#         A     185.199.110.153
+#         A     185.199.111.153
+#      (or a CNAME/ALIAS to <user>.github.io for a www subdomain).
+#
+# PREFER CLOUDFLARE PAGES INSTEAD?  Replace the `deploy` job with:
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-node@v4
+#         with: { node-version: 20 }
+#       - run: node scripts/fetch-games.js || true
+#       - run: node scripts/build.js
+#       - uses: cloudflare/wrangler-action@v3
+#         with:
+#           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+#           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+#           command: pages deploy dist --project-name=<your-project>
+#   ...and add CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in repo Settings -> Secrets.
