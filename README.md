@@ -6,6 +6,8 @@ A zero-dependency static site generator for a game-aggregator portal that moneti
 
 Ships with **sample data** so it builds and previews out of the box.
 
+> **Live example built from this template:** [BiteArcade](https://bitearcade.com) — 201 real GameMonetize games, daily auto-refresh, deployed on GitHub Pages + Cloudflare DNS.
+
 ## Quick start
 
 ```bash
@@ -30,9 +32,21 @@ and publishes to **GitHub Pages**. One-time setup:
 
 1. Push this project to a GitHub repo (`main` branch).
 2. Repo **Settings → Pages → Source = "GitHub Actions"**.
-3. For a custom domain: set `siteUrl` in `config.js` (the build auto-writes `dist/CNAME`), add the
-   same domain under Settings → Pages, and point your DNS apex at GitHub Pages' IPs (listed in the
-   workflow file). Prefer Cloudflare Pages? The workflow has a drop-in alternative job at the bottom.
+   - Or via CLI: `gh api repos/<owner>/<repo>/pages -X POST -f build_type=workflow`. **The push-triggered
+     run fails the first time** (Pages wasn't enabled yet — `configure-pages` errors); just
+     `gh run rerun <id>` after enabling Pages.
+3. For a custom domain: set `siteUrl` in `config.js` (the build auto-writes `dist/CNAME`) and add the
+   domain under Settings → Pages. Two gotchas that will waste your afternoon otherwise:
+   - **DNS (Cloudflare):** four `A` records on `@` → `185.199.108–111.153`, plus `www` CNAME →
+     `<owner>.github.io`. **Set every record to "DNS only" (grey cloud), NOT Proxied (orange)** —
+     orange-cloud proxying breaks GitHub's cert issuance and causes redirect loops.
+   - **HTTPS cert:** if you set the custom domain via the API, GitHub may not auto-trigger the
+     Let's Encrypt cert (`https://...` shows a cert-mismatch). Fix: remove + re-add the domain to
+     nudge it — `echo '{"cname":null}' | gh api repos/<owner>/<repo>/pages -X PUT --input -`, wait
+     ~20s, then re-`PUT` `cname=<domain>`; poll `.https_certificate.state` until `issued`, then set
+     `https_enforced=true`.
+
+Prefer Cloudflare Pages? The workflow has a drop-in alternative job at the bottom.
 
 If a feed is temporarily down during a CI run, the build falls back to the committed
 `data/games.json`, so it never publishes an empty site — keep a known-good `data/games.json` committed.
