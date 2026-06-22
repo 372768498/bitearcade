@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/* PlayArena — game portal theme                                       */
+/* BiteArcade — game portal theme                                      */
 /* ------------------------------------------------------------------ */
 :root {
   --bg: #0e0e14;
@@ -165,3 +165,18 @@ h1, h2, h3 { line-height: 1.2; margin: 0 0 .4em; }
   .nav { display: none; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
 }
+
+/* game facts table + faq (SEO content blocks) */
+.game-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px 24px; margin: 18px 0 6px; max-width: 720px; }
+.game-facts > div { display: flex; gap: 10px; align-items: baseline; border-bottom: 1px solid var(--border); padding: 8px 0; }
+.game-facts dt { color: var(--muted); font-size: 13px; font-weight: 700; min-width: 80px; }
+.game-facts dd { margin: 0; font-size: 14px; color: #c7c7d6; }
+.game-facts dd a { color: var(--accent-2); }
+.faq { max-width: 720px; margin-top: 8px; }
+.faq details { border: 1px solid var(--border); border-radius: 10px; background: var(--card); margin-bottom: 8px; }
+.faq summary { cursor: pointer; padding: 11px 14px; font-weight: 600; font-size: 15px; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before { content: "+"; color: var(--accent-2); font-weight: 800; margin-right: 9px; }
+.faq details[open] summary::before { content: "\2212"; }
+.faq details p { margin: 0; padding: 0 14px 13px; color: #c7c7d6; font-size: 14px; max-width: none; }
+.game-aside .more { display: inline-block; margin-top: 12px; }

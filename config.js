@@ -16,6 +16,11 @@ module.exports = {
   locale: 'en',
   themeColor: '#7c5cff',
 
+  // Google Search Console verification. In GSC choose the "HTML tag" method and paste
+  // ONLY the content="..." value here (just the token). Rebuild → GSC verifies the site.
+  // Leave '' to skip. (Alternative: verify a Domain property via a DNS TXT record at Cloudflare.)
+  googleSiteVerification: '',
+
   // --- Game feeds -----------------------------------------------------------
   // Paste the feed URL(s) you generate in each platform's RSS/Feed builder.
   //   GameMonetize : https://gamemonetize.com/rss-builder   (choose JSON output)

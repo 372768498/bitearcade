@@ -114,6 +114,43 @@ const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" width="28" height="28" 
   <rect x="22.6" y="12.5" width="2.8" height="5" rx="1.4" fill="#fff"/>
 </svg>`;
 
+// schema.org BreadcrumbList from [{name, url}, ...] (drives breadcrumb rich results)
+function breadcrumbLd(items) {
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem', position: i + 1, name: it.name, item: it.url,
+    })),
+  };
+}
+
+// Two concise, game-specific FAQ entries. Returns {visible, ld} so the rendered text
+// and the FAQPage structured data are byte-identical (Google requires the match).
+function faqFor(game) {
+  const cat = String(game.category || 'arcade').toLowerCase();
+  const qa = [
+    {
+      q: `Is ${game.title} free to play?`,
+      a: `Yes. ${game.title} is completely free to play online at ${config.siteName} — no download, no installation and no sign-up.`,
+    },
+    {
+      q: `Can I play ${game.title} on mobile?`,
+      a: `Yes. ${game.title} is an HTML5 ${cat} game that runs right in the browser, so it works on phones, tablets and desktop.`,
+    },
+  ];
+  const visible = `<div class="faq">${qa
+    .map((x) => `<details><summary>${esc(x.q)}</summary><p>${esc(x.a)}</p></details>`)
+    .join('')}</div>`;
+  const ld = {
+    '@type': 'FAQPage',
+    mainEntity: qa.map((x) => ({
+      '@type': 'Question', name: x.q,
+      acceptedAnswer: { '@type': 'Answer', text: x.a },
+    })),
+  };
+  return { visible, ld };
+}
+
 // ---------------------------------------------------------------------------
 // layout
 // ---------------------------------------------------------------------------
@@ -131,6 +168,7 @@ function layout({ title, description, canonical, body, jsonLd, ogImage }) {
 <meta name="description" content="${esc(desc)}">
 <link rel="canonical" href="${esc(url)}">
 <meta name="theme-color" content="${config.themeColor}">
+${config.googleSiteVerification ? `<meta name="google-site-verification" content="${esc(config.googleSiteVerification)}">` : '<!-- google-site-verification: set config.googleSiteVerification to enable -->'}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(config.siteName)}">
 <meta property="og:title" content="${esc(fullTitle)}">
@@ -141,8 +179,9 @@ function layout({ title, description, canonical, body, jsonLd, ogImage }) {
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="preconnect" href="https://html5.gamemonetize.com">
+<link rel="preconnect" href="https://img.gamemonetize.com">
 <link rel="stylesheet" href="/styles.css">
-${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>` : ''}
+${jsonLd ? `<script type="application/ld+json">${JSON.stringify(Array.isArray(jsonLd) ? { '@context': 'https://schema.org', '@graph': jsonLd } : jsonLd)}</script>` : ''}
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -268,17 +307,24 @@ function homePage(games, categories) {
     description: config.description,
     canonical: '/',
     body,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: config.siteName,
-      url: SITE + '/',
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: SITE + '/games.html?q={search_term_string}',
-        'query-input': 'required name=search_term_string',
+    jsonLd: [
+      {
+        '@type': 'WebSite',
+        name: config.siteName,
+        url: SITE + '/',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: SITE + '/games.html?q={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
       },
-    },
+      {
+        '@type': 'Organization',
+        name: config.siteName,
+        url: SITE + '/',
+        logo: SITE + '/icon.svg',
+      },
+    ],
   });
 }
 
@@ -304,17 +350,32 @@ function categoryPage(cat) {
     description: `Play ${cat.count} free ${cat.name.toLowerCase()} games online — no download.`,
     canonical: `/category/${cat.slug}.html`,
     body,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      name: `${cat.name} Games`,
-      url: `${SITE}/category/${cat.slug}.html`,
-    },
+    jsonLd: [
+      {
+        '@type': 'CollectionPage',
+        name: `${cat.name} Games`,
+        url: `${SITE}/category/${cat.slug}.html`,
+        description: `Free ${cat.name.toLowerCase()} games to play online.`,
+      },
+      breadcrumbLd([
+        { name: 'Home', url: SITE + '/' },
+        { name: cat.name, url: `${SITE}/category/${cat.slug}.html` },
+      ]),
+      {
+        '@type': 'ItemList',
+        numberOfItems: cat.games.length,
+        itemListElement: cat.games.map((g, i) => ({
+          '@type': 'ListItem', position: i + 1, url: `${SITE}/game/${g.slug}.html`, name: g.title,
+        })),
+      },
+    ],
   });
 }
 
 function gamePage(game, related) {
   const thumb = game.thumb && /^https?:/.test(game.thumb) ? game.thumb : `${SITE}/thumbs/${game.slug}.svg`;
+  const faq = faqFor(game);
+  const controls = truncate(game.instructions, 70) || 'Mouse / touch';
   const body = `<div class="wrap game-layout">
     <article class="game-main">
       <nav class="crumbs"><a href="/">Home</a> / <a href="/category/${game.categorySlug}.html">${esc(game.category)}</a> / <span>${esc(game.title)}</span></nav>
@@ -322,14 +383,25 @@ function gamePage(game, related) {
       ${player(game)}
       ${adSlot('game-under-player')}
       <section class="game-info">
-        ${game.description ? `<h2>About ${esc(game.title)}</h2><p>${esc(game.description)}</p>` : ''}
-        ${game.instructions ? `<h2>How to play</h2><p>${esc(game.instructions)}</p>` : ''}
+        <h2>About ${esc(game.title)}</h2>
+        <p>${esc(game.description)}</p>
+        <h2>How to play ${esc(game.title)}</h2>
+        <p>${esc(game.instructions)}</p>
+        <dl class="game-facts">
+          <div><dt>Category</dt><dd><a href="/category/${game.categorySlug}.html">${esc(game.category)}</a></dd></div>
+          <div><dt>Controls</dt><dd>${esc(controls)}</dd></div>
+          <div><dt>Platform</dt><dd>Browser (HTML5) — desktop &amp; mobile</dd></div>
+          <div><dt>Price</dt><dd>Free to play</dd></div>
+        </dl>
         ${game.tags.length ? `<div class="tags">${game.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        <h2>${esc(game.title)} — FAQ</h2>
+        ${faq.visible}
       </section>
     </article>
     <aside class="game-aside">
-      <h2>More games</h2>
+      <h2>More ${esc(game.category)} games</h2>
       ${grid(related)}
+      <a class="more" href="/category/${game.categorySlug}.html">See all ${esc(game.category)} games →</a>
     </aside>
   </div>`;
   return layout({
@@ -338,18 +410,29 @@ function gamePage(game, related) {
     canonical: `/game/${game.slug}.html`,
     ogImage: thumb,
     body,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'VideoGame',
-      name: game.title,
-      description: truncate(game.description, 300),
-      url: `${SITE}/game/${game.slug}.html`,
-      image: thumb,
-      genre: game.category,
-      applicationCategory: 'Game',
-      operatingSystem: 'Any (HTML5 / browser)',
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    },
+    jsonLd: [
+      {
+        '@type': 'VideoGame',
+        name: game.title,
+        description: truncate(game.description, 300),
+        url: `${SITE}/game/${game.slug}.html`,
+        image: thumb,
+        genre: game.category,
+        keywords: game.tags.join(', '),
+        inLanguage: config.locale,
+        applicationCategory: 'GameApplication',
+        operatingSystem: 'Web browser (HTML5)',
+        gamePlatform: ['Web Browser', 'Mobile'],
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
+        publisher: { '@type': 'Organization', name: config.siteName, url: SITE + '/' },
+      },
+      breadcrumbLd([
+        { name: 'Home', url: SITE + '/' },
+        { name: game.category, url: `${SITE}/category/${game.categorySlug}.html` },
+        { name: game.title, url: `${SITE}/game/${game.slug}.html` },
+      ]),
+      faq.ld,
+    ],
   });
 }
 
